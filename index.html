@@ -264,11 +264,12 @@ details.method ul{margin:8px 0 2px;padding-left:18px;line-height:1.6}
   <div class="cc-box">
     <div class="cc-top"><h2 id="ccTitle">Card para comitê</h2>
       <div class="cc-seg" role="group" aria-label="Indicador do card"><button type="button" data-cc="giro" aria-pressed="true">Giro</button><button type="button" data-cc="share" aria-pressed="false">Market share</button></div>
+      <div class="cc-seg" role="group" aria-label="Formato do card"><button type="button" data-ccf="wide" aria-pressed="true">16 × 6,5 cm</button><button type="button" data-ccf="quarter" aria-pressed="false">1/4 de slide</button></div>
       <button class="cc-x" id="ccClose" type="button" aria-label="Fechar">×</button></div>
-    <div class="cc-fields"><label>Título (mensagem do card)<input id="ccHead" type="text"></label><label>Fonte<input id="ccSrc" type="text" value="Closeup"></label></div>
+    <div class="cc-fields"><label>Título (mensagem do card)<input id="ccHead" type="text"></label><label id="ccSrcWrap">Fonte<input id="ccSrc" type="text" value="Closeup"></label></div>
     <div class="cc-prev" id="ccPrev"></div>
     <div class="cc-act"><button class="btn primary" id="ccPng" type="button">Baixar PNG</button><button class="btn" id="ccCopy" type="button">Copiar imagem</button>
-      <span class="cc-msg" id="ccMsg">Formato 16:9, do tamanho de um quarto de slide. Usa os filtros aplicados no Dash.</span></div>
+      <span class="cc-msg" id="ccMsg">Formato 16 × 6,5 cm, sem cabeçalho.</span></div>
   </div>
 </div>
 <div class="tip" id="tip"></div>
@@ -591,7 +592,7 @@ function render(){
 }
 
 /* ---------- card para comitê ---------- */
-const CC={kind:'giro',edited:false,src:{giro:'Closeup',share:''}};
+const CC={kind:'giro',fmt:'wide',edited:false,src:{giro:'Closeup',share:''}};
 const cesc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function ccFilters(){const parts=[];const nm=(set,arr)=>[...set].map(i=>arr[i]);
   if(sel.band.size)parts.push('Cliente: '+(sel.band.size>3?sel.band.size+' clientes':nm(sel.band,D.bands).join(', ')));
@@ -611,7 +612,61 @@ function ccData(){
 function ccAuto(d){const m=d.m;
   if(CC.kind==='giro'){if(m.fg==null)return 'Giro médio por PDV: visitados × não visitados';return 'Lojas visitadas giram '+br(Math.abs(m.fg),0)+'% '+(m.fg>=0?'mais':'menos')+' que as não visitadas'}
   if(m.dm==null)return 'Market share de '+d.per+' ainda não disponível na base';return 'Lojas visitadas têm share '+br(Math.abs(m.dm),2)+' p.p. '+(m.dm>=0?'maior':'menor')+' que as não visitadas'}
-function ccSVG(d){
+const CC_FMT={wide:{w:1280,h:520,lab:'16 × 6,5 cm'},quarter:{w:960,h:540,lab:'1/4 de slide (16:9)'}};
+function ccSVG(d){return CC.fmt==='quarter'?ccSVGQuarter(d):ccSVGWide(d)}
+function ccSVGWide(d){
+  const G=CC.kind==='giro',m=d.m,Wd=1280,H=520,F="'Source Sans 3','Segoe UI',Arial,Helvetica,'Liberation Sans',sans-serif".replace(/"/g,'');
+  const val=G?m.fg:m.dm,valTxt=G?fmtD(m.fg,1,'%'):fmtD(m.dm,2,' p.p.'),pos=val==null||val>=0;
+  const P='#2b9467',PB='#d3ecdc',NG='#c4453b',NB='#f6dad6',NAV='#1d3b58',INK='#142236',MU='#6b7d91',LN='#d4dee8',GR='#1f7a52';
+  const T=(x,y,s,o)=>'<text x="'+x+'" y="'+y+'" font-family="'+F+'" font-size="'+(o.s||16)+'" font-weight="'+(o.w||400)+'" fill="'+(o.c||INK)+'"'+(o.a?' text-anchor="'+o.a+'"':'')+'>'+cesc(s)+'</text>';
+  let s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+Wd+' '+H+'" width="'+Wd+'" height="'+H+'"><rect width="'+Wd+'" height="'+H+'" fill="#ffffff"/>';
+  // sem cabeçalho: o slide já traz o título do bloco e a fonte
+  let head=$('ccHead').value.trim();if(head.length>80)head=head.slice(0,79)+'…';
+  s+=T(24,48,head,{s:30,w:700,c:NAV});
+  s+=T(Wd-24,46,d.per+(d.proj?' (projeção)':'')+' · '+(G?'un./PDV/mês':'RDD EMS ÷ mercado'),{s:17,c:MU,a:'end'});
+  const top=84,bot=H-44;
+  // coluna 1: número principal
+  const c1=24,c1w=340;
+  s+=T(c1,top+20,G?'Δ giro':'Δ share',{s:18,w:700,c:MU});
+  if(val==null){s+=T(c1,top+76,'Ainda sem dados',{s:32,w:700,c:MU});s+=T(c1,top+106,G?'para o período selecionado':'Mercado montado de '+d.per+' não está na base',{s:16,c:MU})}
+  else s+=T(c1,top+112,valTxt,{s:G?(valTxt.length>6?80:88):(valTxt.length>10?58:66),w:700,c:pos?GR:NG});
+  if(d.prev&&val!=null){const pv=G?d.prev.m.fg:d.prev.m.dm;if(pv!=null){const dd=val-pv;s+=T(c1,top+156,(dd>=0?'▲ ':'▼ ')+br(Math.abs(dd),G?1:2)+' p.p. vs '+d.prev.lab,{s:18,w:700,c:dd>=0?GR:NG})}}
+  const vv=G?fmtN(m.gv,1):fmtP(m.mv),nn=G?fmtN(m.gn,1):fmtP(m.mn),by=bot-50;
+  s+='<circle cx="'+(c1+6)+'" cy="'+(by-6)+'" r="6" fill="#1f3550"/>'+T(c1+18,by,'Visitado',{s:17,c:MU});
+  s+=T(c1,by+42,vv,{s:38,w:700,c:'#1f3550'});
+  s+='<circle cx="'+(c1+186)+'" cy="'+(by-6)+'" r="6" fill="#6f97b8"/>'+T(c1+198,by,'Não visitado',{s:17,c:MU});
+  s+=T(c1+180,by+42,nn,{s:38,w:700,c:'#4d7698'});
+  s+='<line x1="'+(c1+c1w+20)+'" x2="'+(c1+c1w+20)+'" y1="'+top+'" y2="'+bot+'" stroke="'+LN+'"/>';
+  // coluna 2: tendência
+  const c2=c1+c1w+44,c2w=300;
+  s+=T(c2,top+20,(G?'Δ giro':'Δ share')+' nos últimos meses',{s:17,w:700,c:MU});
+  const tr=d.trend.filter(x=>(G?x.m.fg:x.m.dm)!=null),tv=tr.map(x=>G?x.m.fg:x.m.dm),tmax=Math.max(1e-9,...tv.map(Math.abs));
+  const gap=18,bw=Math.min(110,(c2w-gap*2)/3),base=bot-30,bh=base-(top+70);
+  tr.forEach((x,i)=>{const v=tv[i],h=Math.max(4,Math.abs(v)/tmax*bh),X=c2+i*(bw+gap),ng=v<0;
+    s+='<rect x="'+X+'" y="'+(base-h)+'" width="'+bw+'" height="'+h+'" rx="5" fill="'+(x.cur?(ng?NG:P):(ng?NB:PB))+'"/>';
+    s+=T(X+bw/2,base-h-9,G?sgn(v,1)+'%':sgn(v,2),{s:20,w:700,c:ng?NG:GR,a:'middle'});
+    s+=T(X+bw/2,base+24,x.lab,{s:17,w:x.cur?700:400,c:x.cur?INK:MU,a:'middle'})});
+  if(!tr.length)s+=T(c2,top+60,'Sem histórico para o período',{s:16,c:MU});
+  s+='<line x1="'+(c2+c2w+20)+'" x2="'+(c2+c2w+20)+'" y1="'+top+'" y2="'+bot+'" stroke="'+LN+'"/>';
+  // coluna 3: BU
+  const c3=c2+c2w+44,c3w=Wd-24-c3;
+  s+=T(c3,top+20,(G?'Δ giro':'Δ share')+' por BU',{s:17,w:700,c:MU});
+  const bu=d.bu.filter(r=>(G?r.m.fg:r.m.dm)!=null).sort((a,b)=>(G?b.m.fg-a.m.fg:b.m.dm-a.m.dm)).slice(0,7);
+  const rows=bu.length,y0=top+34,rh=Math.min(44,(bot-y0)/Math.max(1,rows)),labW=204,valW=96,barW=c3w-labW-valW-8;
+  const absv=bu.map(r=>Math.abs(G?r.m.fg:r.m.dm)).sort((a,b)=>b-a),cap=absv.length>2&&absv[0]>2.5*absv[1]?absv[1]*1.3:Infinity;
+  const vs=bu.map(r=>G?r.m.fg:r.m.dm),pMax=Math.min(cap,Math.max(0,...vs)),nMax=Math.min(cap,Math.max(0,...vs.map(v=>-v))),tot=Math.max(1e-9,pMax+nMax),sc=barW/tot,zx=c3+labW+nMax*sc;
+  bu.forEach((r,i)=>{const v=vs[i],y=y0+i*rh,cy=y+rh/2,fs=rh<30?15:17,ng=v<0,lim=ng?nMax:pMax;let w=Math.max(3,Math.abs(v)*sc);const cut=Math.abs(v)>lim+1e-9;if(cut)w=lim*sc;const bx=ng?zx-w:zx;
+    s+=T(c3,cy+6,r.name,{s:fs,c:INK});
+    s+='<rect x="'+bx+'" y="'+(cy-8)+'" width="'+w+'" height="16" rx="3" fill="'+(ng?NG:P)+'"/>';
+    if(cut){const cx=ng?bx+14:bx+w-14;s+='<path d="M'+(cx-4)+' '+(cy+10)+'l6 -20M'+(cx+3)+' '+(cy+10)+'l6 -20" stroke="#fff" stroke-width="3"/>'}
+    s+=T(Wd-24,cy+6,G?sgn(v,1)+'%':sgn(v,2)+' p.p.',{s:fs,w:700,c:ng?NG:GR,a:'end'})});
+  if(!rows)s+=T(c3,top+60,'Sem dados por BU para os filtros aplicados',{s:16,c:MU});
+  // rodapé
+  s+='<line x1="24" x2="'+(Wd-24)+'" y1="'+(H-34)+'" y2="'+(H-34)+'" stroke="'+LN+'"/>';
+  const fl=ccFilters();s+=T(24,H-12,(fl.length>140?fl.slice(0,138)+'…':fl)+' · '+br(m.pv,0)+' PDVs visitados, '+br(m.pn,0)+' não visitados',{s:14,c:MU});
+  return s+'</svg>'
+}
+function ccSVGQuarter(d){
   const G=CC.kind==='giro',m=d.m,Wd=960,H=540,F="'Source Sans 3','Segoe UI',Arial,Helvetica,'Liberation Sans',sans-serif";
   const val=G?m.fg:m.dm,valTxt=G?fmtD(m.fg,1,'%'):fmtD(m.dm,2,' p.p.'),pos=val==null||val>=0;
   const P='#2b9467',PB='#d3ecdc',NG='#c4453b',NB='#f6dad6',NAV='#1d3b58',INK='#142236',MU='#6b7d91',LN='#d4dee8';
@@ -665,17 +720,18 @@ function ccSVG(d){
   const fl=ccFilters();s+=T(24,H-14,(fl.length>110?fl.slice(0,108)+'…':fl)+' · '+br(m.pv,0)+' PDVs visitados, '+br(m.pn,0)+' não visitados',{s:13,c:MU});
   return s+'</svg>'
 }
-function ccRender(){const d=ccData();CC.last=d;if(!CC.edited)$('ccHead').value=ccAuto(d);$('ccPrev').innerHTML=ccSVG(d);const msg=$('ccMsg');if(CC.kind==='share'&&d.m.dm==null){msg.className='cc-msg err';msg.textContent='O período filtrado ainda não tem market share. Escolha um mês com mercado montado no filtro de mês.'}else{msg.className='cc-msg';msg.textContent='Formato 16:9, do tamanho de um quarto de slide. Usa os filtros aplicados no Dash.'}}
+function ccRender(){const d=ccData();CC.last=d;$('ccSrcWrap').style.display=CC.fmt==='quarter'?'':'none';if(!CC.edited)$('ccHead').value=ccAuto(d);$('ccPrev').innerHTML=ccSVG(d);const msg=$('ccMsg');if(CC.kind==='share'&&d.m.dm==null){msg.className='cc-msg err';msg.textContent='O período filtrado ainda não tem market share. Escolha um mês com mercado montado no filtro de mês.'}else{msg.className='cc-msg';msg.textContent=(CC.fmt==='wide'?'Formato 16 × 6,5 cm, sem cabeçalho: use o título e a fonte do próprio slide.':'Formato 16:9, um quarto de slide.')+' Usa os filtros aplicados no Dash.'}}
 function ccOpen(){CC.edited=false;$('ccSrc').value=CC.src[CC.kind];ccRender();$('ccBack').classList.add('open');$('ccHead').focus()}
 function ccClose(){$('ccBack').classList.remove('open');$('openCard').focus()}
 function ccBlob(){return new Promise((res,rej)=>{const svg=ccSVG(CC.last),img=new Image(),sc=2;
-  img.onload=()=>{const c=document.createElement('canvas');c.width=960*sc;c.height=540*sc;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/png')};
+  img.onload=()=>{const c=document.createElement('canvas');const f=CC_FMT[CC.fmt];c.width=f.w*sc;c.height=f.h*sc;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error('blob')),'image/png')};
   img.onerror=rej;img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)})}
-function ccName(){return 'card_comite_'+CC.kind+'_'+CC.last.per.replace(/[^\wÀ-ú]+/g,'_')+'.png'}
+function ccName(){return 'card_comite_'+CC.kind+'_'+CC.fmt+'_'+CC.last.per.replace(/[^\wÀ-ú]+/g,'_')+'.png'}
 $('openCard').onclick=ccOpen;$('ccClose').onclick=ccClose;
 $('ccBack').addEventListener('click',e=>{if(e.target===$('ccBack'))ccClose()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('ccBack').classList.contains('open'))ccClose()});
 document.querySelectorAll('[data-cc]').forEach(b=>b.onclick=()=>{CC.kind=b.dataset.cc;$('ccSrc').value=CC.src[CC.kind];CC.edited=false;document.querySelectorAll('[data-cc]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));ccRender()});
+document.querySelectorAll('[data-ccf]').forEach(b=>b.onclick=()=>{CC.fmt=b.dataset.ccf;document.querySelectorAll('[data-ccf]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));ccRender()});
 $('ccHead').oninput=()=>{CC.edited=true;$('ccPrev').innerHTML=ccSVG(CC.last)};
 $('ccSrc').oninput=()=>{CC.src[CC.kind]=$('ccSrc').value;$('ccPrev').innerHTML=ccSVG(CC.last)};
 $('ccPng').onclick=async()=>{const msg=$('ccMsg');try{const b=await ccBlob(),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=ccName();document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500);msg.className='cc-msg ok';msg.textContent='Imagem baixada. É só inserir no slide.'}catch(err){msg.className='cc-msg err';msg.textContent='Não foi possível gerar a imagem neste navegador.'}};
